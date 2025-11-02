@@ -1,12 +1,24 @@
+import axios from "axios";
+import redis from "../utils/redisClient.js";
+
+const API_KEY = process.env.STOCK_API_KEY;
+const TTL = 60; // cache 1 min
+
 export const fetchStockData = async (symbol) => {
-  const mockData = {
-    AAPL: { price: 220.15, change: "+1.2%" },
-    TSLA: { price: 180.45, change: "-0.5%" },
-    GOOGL: { price: 134.72, change: "+0.8%" },
-  };
-  
-  // Simulate async fetch
-  await new Promise((r) => setTimeout(r, 300));
-  
-  return mockData[symbol.toUpperCase()] || { error: "Stock not found" };
+  const cacheKey = `stock:${symbol.toUpperCase()}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    console.log(`♻️ Cache hit for ${cacheKey}`);
+    return JSON.parse(cached);
+  }
+
+  console.log(`📈 Fetching stock data from API for ${symbol}`);
+  const { data } = await axios.get(
+    `https://api.api-ninjas.com/v1/stockprice?ticker=${symbol}`,
+    { headers: { "X-Api-Key": API_KEY } }
+  );
+
+  await redis.set(cacheKey, JSON.stringify(data), "EX", TTL);
+  return data;
 };
+
